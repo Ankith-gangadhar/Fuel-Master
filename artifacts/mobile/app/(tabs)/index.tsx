@@ -203,7 +203,7 @@ export default function HomeScreen() {
       <View
         style={[
           styles.fab,
-          { bottom: (Platform.OS === 'web' ? 34 : insets.bottom) + 24 },
+          { bottom: (Platform.OS === 'web' ? 84 : 60 + insets.bottom) + 16 },
         ]}
       >
         <Pressable
