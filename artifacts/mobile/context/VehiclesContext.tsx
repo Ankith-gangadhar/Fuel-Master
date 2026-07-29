@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/build/legacy/index';
 import { Platform } from 'react-native';
 import {
   AddFuelInput,
@@ -14,6 +14,55 @@ const STORAGE_KEY = '@mileage_tracker_v1';
 
 function genId(): string {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+}
+
+export function recalculateFuelEntries(entries: FuelEntry[], initialOdometer: number): FuelEntry[] {
+  // Sort entries chronologically by odometer
+  const sorted = [...entries].sort((a, b) => a.odometer - b.odometer);
+
+  const result: FuelEntry[] = [];
+
+  for (let i = 0; i < sorted.length; i++) {
+    const current = sorted[i];
+
+    const prevRefillOdometer = i === 0 ? initialOdometer : sorted[i - 1].odometer;
+    const prevLitersFilled = i === 0 ? 0 : sorted[i - 1].litresFilled;
+    const prevReserveOffset = i === 0 ? 0 : (sorted[i - 1].reserveOffset ?? 0);
+
+    let displayedDistance = 0;
+    let actualDistance = 0;
+    let mileage = 0;
+    let reserveOffset = 0;
+
+    if (current.reachedReserve) {
+      const reserveOdometer = current.reserveOdometer ?? current.odometer;
+      reserveOffset = current.odometer - reserveOdometer;
+      displayedDistance = reserveOdometer - prevRefillOdometer;
+      actualDistance = displayedDistance - prevReserveOffset;
+    } else {
+      reserveOffset = 0;
+      displayedDistance = current.odometer - prevRefillOdometer;
+      actualDistance = displayedDistance - prevReserveOffset;
+    }
+
+    if (actualDistance < 0) {
+      actualDistance = 0;
+    }
+
+    if (prevLitersFilled > 0) {
+      mileage = parseFloat((actualDistance / prevLitersFilled).toFixed(2));
+    }
+
+    result.push({
+      ...current,
+      prevReserveOffset,
+      distance: actualDistance, // map actual distance to distance for compatibility
+      reserveOffset,
+      mileage: i === 0 ? 0 : mileage,
+    });
+  }
+
+  return result;
 }
 
 interface VehiclesContextType {
@@ -40,7 +89,14 @@ export function VehiclesProvider({ children }: { children: React.ReactNode }) {
       if (json) {
         try {
           const data = JSON.parse(json);
-          if (Array.isArray(data)) setVehicles(data);
+          if (Array.isArray(data)) {
+            // Auto-migrate and recalculate existing entries on load
+            const migrated = data.map((v: any) => ({
+              ...v,
+              fuelEntries: recalculateFuelEntries(v.fuelEntries || [], v.initialOdometer || 0),
+            }));
+            setVehicles(migrated);
+          }
         } catch {
           // ignore corrupt data
         }
@@ -61,6 +117,8 @@ export function VehiclesProvider({ children }: { children: React.ReactNode }) {
       name: data.name.trim(),
       type: data.type,
       initialOdometer: data.initialOdometer,
+      mainTankSize: data.mainTankSize,
+      reserveTankSize: data.reserveTankSize,
       createdAt: now,
       updatedAt: now,
       fuelEntries: [],
@@ -96,25 +154,45 @@ export function VehiclesProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      const distance = data.odometer - prevOdometer;
-      const mileage = parseFloat((distance / data.litresFilled).toFixed(2));
+      if (data.reachedReserve) {
+        const resOdo = data.reserveOdometer ?? 0;
+        if (isNaN(resOdo) || resOdo <= prevOdometer) {
+          return {
+            success: false,
+            error: `Reserve odometer must be greater than previous odometer (${prevOdometer.toLocaleString()} km)`,
+          };
+        }
+        if (resOdo > data.odometer) {
+          return {
+            success: false,
+            error: `Reserve odometer cannot be greater than the refill odometer (${data.odometer.toLocaleString()} km)`,
+          };
+        }
+      }
 
-      const entry: FuelEntry = {
+      const newEntry: FuelEntry = {
         id: genId(),
         vehicleId,
         date: data.date,
         odometer: data.odometer,
         litresFilled: data.litresFilled,
-        distance,
-        mileage,
+        distance: 0, // recalculated below
+        mileage: 0, // recalculated below
+        reachedReserve: data.reachedReserve ?? false,
+        reserveOdometer: data.reachedReserve ? data.reserveOdometer : undefined,
       };
+
+      const updatedEntries = recalculateFuelEntries(
+        [...vehicle.fuelEntries, newEntry],
+        vehicle.initialOdometer
+      );
 
       persist(
         vehicles.map(v =>
           v.id === vehicleId
             ? {
                 ...v,
-                fuelEntries: [...v.fuelEntries, entry],
+                fuelEntries: updatedEntries,
                 updatedAt: new Date().toISOString(),
               }
             : v
@@ -128,15 +206,15 @@ export function VehiclesProvider({ children }: { children: React.ReactNode }) {
   const deleteFuelEntry = useCallback(
     (vehicleId: string, entryId: string) => {
       persist(
-        vehicles.map(v =>
-          v.id === vehicleId
-            ? {
-                ...v,
-                fuelEntries: v.fuelEntries.filter(e => e.id !== entryId),
-                updatedAt: new Date().toISOString(),
-              }
-            : v
-        )
+        vehicles.map(v => {
+          if (v.id !== vehicleId) return v;
+          const filtered = v.fuelEntries.filter(e => e.id !== entryId);
+          return {
+            ...v,
+            fuelEntries: recalculateFuelEntries(filtered, v.initialOdometer),
+            updatedAt: new Date().toISOString(),
+          };
+        })
       );
     },
     [vehicles, persist]
@@ -168,7 +246,13 @@ export function VehiclesProvider({ children }: { children: React.ReactNode }) {
       if (!data.vehicles || !Array.isArray(data.vehicles)) {
         return { success: false, message: 'Invalid backup format. Expected { "version": 1, "vehicles": [...] }' };
       }
-      persist(data.vehicles);
+      
+      const updatedVehicles = data.vehicles.map((v: any) => ({
+        ...v,
+        fuelEntries: recalculateFuelEntries(v.fuelEntries || [], v.initialOdometer || 0),
+      }));
+
+      persist(updatedVehicles);
       return { success: true, message: `Imported ${data.vehicles.length} vehicle(s) successfully` };
     } catch {
       return { success: false, message: 'Failed to parse JSON. Please check the format.' };
@@ -219,14 +303,27 @@ export function getVehicleStats(vehicle: Vehicle) {
       lastEntry: null as FuelEntry | null,
     };
   }
-  const mileages = entries.map(e => e.mileage);
-  const totalDistance = entries.reduce((s, e) => s + e.distance, 0);
+
+  const validMileages = entries.map(e => e.mileage).filter(m => m > 0);
+  const totalDistance = entries[entries.length - 1].odometer - vehicle.initialOdometer;
   const totalFuel = entries.reduce((s, e) => s + e.litresFilled, 0);
+
+  let resolvedDistance = 0;
+  let resolvedFuel = 0;
+  for (let i = 1; i < entries.length; i++) {
+    resolvedDistance += entries[i].distance;
+    resolvedFuel += entries[i - 1].litresFilled;
+  }
+
+  const avgMileage = resolvedFuel > 0 ? parseFloat((resolvedDistance / resolvedFuel).toFixed(2)) : 0;
+  const bestMileage = validMileages.length > 0 ? Math.max(...validMileages) : 0;
+  const worstMileage = validMileages.length > 0 ? Math.min(...validMileages) : 0;
+
   return {
     currentOdometer: entries[entries.length - 1].odometer,
-    avgMileage: parseFloat((totalDistance / totalFuel).toFixed(2)),
-    bestMileage: Math.max(...mileages),
-    worstMileage: Math.min(...mileages),
+    avgMileage,
+    bestMileage,
+    worstMileage,
     totalDistance,
     totalFuel: parseFloat(totalFuel.toFixed(2)),
     lastEntry: entries[entries.length - 1],

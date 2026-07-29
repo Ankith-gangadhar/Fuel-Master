@@ -32,6 +32,8 @@ export default function AddVehicleScreen() {
   const [name, setName] = useState('');
   const [vehicleType, setVehicleType] = useState<VehicleType>('car');
   const [odometer, setOdometer] = useState('');
+  const [mainTank, setMainTank] = useState('');
+  const [reserveTank, setReserveTank] = useState('');
   const [errors, setErrors] = useState<{ name?: string; odometer?: string }>({});
 
   const validate = () => {
@@ -45,10 +47,16 @@ export default function AddVehicleScreen() {
 
   const handleSave = () => {
     if (!validate()) return;
+    
+    const mainVal = parseFloat(mainTank);
+    const resVal = parseFloat(reserveTank);
+    
     addVehicle({
       name: name.trim(),
       type: vehicleType,
       initialOdometer: parseFloat(odometer),
+      mainTankSize: isNaN(mainVal) ? undefined : mainVal,
+      reserveTankSize: isNaN(resVal) ? undefined : resVal,
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
@@ -158,6 +166,46 @@ export default function AddVehicleScreen() {
         <Text style={[styles.hint, { color: colors.mutedForeground }]}>
           Enter the current odometer reading. This will be used as the baseline for mileage calculation.
         </Text>
+
+        {/* Tank Sizes (Optional) */}
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: colors.foreground, marginTop: 0 }]}>Main Tank (L) <Text style={{ fontSize: 11, color: colors.mutedForeground, fontWeight: 'normal' }}>(Opt)</Text></Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.muted,
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                },
+              ]}
+              placeholder="e.g. 12"
+              placeholderTextColor={colors.mutedForeground}
+              value={mainTank}
+              onChangeText={setMainTank}
+              keyboardType="numeric"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: colors.foreground, marginTop: 0 }]}>Reserve Tank (L) <Text style={{ fontSize: 11, color: colors.mutedForeground, fontWeight: 'normal' }}>(Opt)</Text></Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.muted,
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                },
+              ]}
+              placeholder="e.g. 2"
+              placeholderTextColor={colors.mutedForeground}
+              value={reserveTank}
+              onChangeText={setReserveTank}
+              keyboardType="numeric"
+            />
+          </View>
+        </View>
 
         {/* Save */}
         <GlowButton

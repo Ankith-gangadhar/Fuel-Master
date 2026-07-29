@@ -78,32 +78,55 @@ export function FuelEntryRow({ entry, isFirst, onDelete }: FuelEntryRowProps) {
           <Text style={[styles.date, { color: colors.mutedForeground }]}>{date}</Text>
         </View>
 
-        {/* Stats */}
-        <View style={styles.statsBlock}>
-          <View style={styles.statPair}>
-            <Text style={[styles.statVal, { color: colors.foreground }]}>
-              {entry.odometer.toLocaleString()}
-            </Text>
-            <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>km</Text>
+        {/* Info Block (Stats + Details) */}
+        <View style={{ flex: 1, gap: 6 }}>
+          {/* Stats */}
+          <View style={styles.statsBlock}>
+            <View style={styles.statPair}>
+              <Text style={[styles.statVal, { color: colors.foreground }]}>
+                {entry.odometer.toLocaleString()}
+              </Text>
+              <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>km</Text>
+            </View>
+            <View style={styles.statPair}>
+              <Text style={[styles.statVal, { color: colors.foreground }]}>
+                {entry.litresFilled}L
+              </Text>
+              <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>fuel</Text>
+            </View>
+            <View style={styles.statPair}>
+              <Text style={[styles.statVal, { color: colors.foreground }]}>
+                {entry.distance > 0 ? `${entry.distance.toLocaleString()} km` : '—'}
+              </Text>
+              <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>dist</Text>
+            </View>
+            <View style={styles.statPair}>
+              <Text style={[styles.statVal, { color: colors.neonPink }]}>
+                {entry.mileage > 0 ? `${entry.mileage.toFixed(1)}` : '—'}
+              </Text>
+              <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>km/L</Text>
+            </View>
           </View>
-          <View style={styles.statPair}>
-            <Text style={[styles.statVal, { color: colors.foreground }]}>
-              {entry.litresFilled}L
-            </Text>
-            <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>fuel</Text>
-          </View>
-          <View style={styles.statPair}>
-            <Text style={[styles.statVal, { color: colors.foreground }]}>
-              {entry.distance} km
-            </Text>
-            <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>dist</Text>
-          </View>
-          <View style={styles.statPair}>
-            <Text style={[styles.statVal, { color: colors.neonPink }]}>
-              {entry.mileage}
-            </Text>
-            <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>km/L</Text>
-          </View>
+
+          {/* Details row if reached reserve or has offset */}
+          {(entry.reachedReserve || (entry.reserveOffset ?? 0) > 0 || (entry.prevReserveOffset ?? 0) > 0) && (
+            <View style={{ flexDirection: 'column', gap: 2, borderTopWidth: 0.5, borderTopColor: `${colors.border}55`, paddingTop: 4 }}>
+              {entry.reachedReserve ? (
+                <Text style={{ fontSize: 10, color: colors.mutedForeground }}>
+                  ⛽ Reserve at <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium' }}>{entry.reserveOdometer?.toLocaleString()} km</Text> (Offset: {entry.reserveOffset} km)
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 10, color: colors.mutedForeground }}>
+                  Direct refill (No reserve)
+                </Text>
+              )}
+              {(entry.prevReserveOffset ?? 0) > 0 && (
+                <Text style={{ fontSize: 10, color: colors.mutedForeground }}>
+                  Deducted prev offset: <Text style={{ color: colors.destructive, fontFamily: 'Inter_500Medium' }}>-{entry.prevReserveOffset} km</Text>
+                </Text>
+              )}
+            </View>
+          )}
         </View>
       </Animated.View>
     </View>

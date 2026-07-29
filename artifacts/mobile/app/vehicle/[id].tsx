@@ -41,8 +41,9 @@ export default function VehicleDetailScreen() {
 
   const sortedEntries = [...vehicle.fuelEntries].reverse();
 
-  const chartData = vehicle.fuelEntries.slice(-10).map((e, i) => ({
-    label: `#${vehicle.fuelEntries.length - (vehicle.fuelEntries.slice(-10).length - 1 - i)}`,
+  const validChartEntries = vehicle.fuelEntries.filter(e => e.mileage > 0);
+  const chartData = validChartEntries.slice(-10).map((e, i) => ({
+    label: `#${vehicle.fuelEntries.indexOf(e) + 1}`,
     value: e.mileage,
   }));
 
@@ -99,6 +100,14 @@ export default function VehicleDetailScreen() {
           </Text>
           <Text style={[styles.headerType, { color: colors.mutedForeground }]}>
             {vehicle.type.charAt(0).toUpperCase() + vehicle.type.slice(1)}
+            {((vehicle.mainTankSize ?? 0) > 0 || (vehicle.reserveTankSize ?? 0) > 0) && (
+              <Text>
+                {' • '}
+                {vehicle.mainTankSize ? `Main: ${vehicle.mainTankSize}L` : ''}
+                {vehicle.mainTankSize && vehicle.reserveTankSize ? ', ' : ''}
+                {vehicle.reserveTankSize ? `Reserve: ${vehicle.reserveTankSize}L` : ''}
+              </Text>
+            )}
           </Text>
         </View>
         <Pressable onPress={handleDeleteVehicle} style={styles.backBtn}>
@@ -153,7 +162,7 @@ export default function VehicleDetailScreen() {
         </View>
 
         {/* Chart */}
-        {vehicle.fuelEntries.length > 1 && (
+        {validChartEntries.length > 1 && (
           <GlassCard style={styles.chartCard}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Mileage Trend</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
