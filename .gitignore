@@ -47,3 +47,14 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Gradle
+.gradle/
+**/build/
+build/
+**/.gradle/
+
+# Build artifacts
+*.apk
+app-release.apk
+Ankith-app-release.apk

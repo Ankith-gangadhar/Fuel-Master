@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/build/legacy/index';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import {
   AddFuelInput,

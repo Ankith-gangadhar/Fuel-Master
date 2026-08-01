@@ -1,0 +1,12 @@
+Build Steps
+# 1. Map to drive X: to bypass nested path limits
+subst X: D:\Fuel-Master
+
+# 2. Go to the project folder on drive X:
+cd X:\artifacts\mobile\android
+
+# 3. Configure the Android SDK environment variable
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+
+# 4. Compile the production release APK
+./gradlew assembleRelease
